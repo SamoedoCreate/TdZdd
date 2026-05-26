@@ -21,16 +21,19 @@
  */
 
 #include <cerrno>
+#include <cstdlib>
 #include <iostream>
 #include <map>
 #include <set>
 #include <stdexcept>
+#include <vector>
 
 #include <tdzdd/DdStructure.hpp>
 #include <tdzdd/DdSpecOp.hpp>
 #include "Board.hpp"
 #include "ConstraintZdd.hpp"
 #include "DegreeZdd.hpp"
+#include "NumlinWithLenZdd.hpp"
 #include "NumlinZdd.hpp"
 
 using namespace tdzdd;
@@ -38,6 +41,7 @@ using namespace tdzdd;
 std::string options[][2] = //
         {{"k <n>", "Allow at most <n> blank boxes (default=infinity)"}, //
          {"a", "Enumerate all solutions"}, //
+         {"n <n>", "Enumerate all solutions with critical path length constraint"}, //
          {"p", "Use parallel processing"}, //
          {"m <n>", "Output <n> solutions at most (default=10)"}};
 
@@ -58,6 +62,77 @@ void usage(char const* cmd) {
     std::cerr << "\n";
 }
 
+static int followPath(Board const& board, int si, int sj, int& ei, int& ej) {
+    int rows = board.rows;
+    int cols = board.cols;
+
+    int pi = si;
+    int pj = sj;
+    int prev_i = -1;
+    int prev_j = -1;
+    int length = 0;
+
+    while (true) {
+        int ni = -1;
+        int nj = -1;
+
+        if (pj + 1 < cols && board.hlink[pi][pj]
+                && !(prev_i == pi && prev_j == pj + 1)) {
+            ni = pi;
+            nj = pj + 1;
+        }
+        if (pj > 0 && board.hlink[pi][pj - 1]
+                && !(prev_i == pi && prev_j == pj - 1)) {
+            ni = pi;
+            nj = pj - 1;
+        }
+        if (pi + 1 < rows && board.vlink[pi][pj]
+                && !(prev_i == pi + 1 && prev_j == pj)) {
+            ni = pi + 1;
+            nj = pj;
+        }
+        if (pi > 0 && board.vlink[pi - 1][pj]
+                && !(prev_i == pi - 1 && prev_j == pj)) {
+            ni = pi - 1;
+            nj = pj;
+        }
+
+        if (ni < 0) break;
+        ++length;
+        prev_i = pi;
+        prev_j = pj;
+        pi = ni;
+        pj = nj;
+
+        if (board.number[pi][pj] > 0) break;
+    }
+
+    ei = pi;
+    ej = pj;
+    return length;
+}
+
+static int computeCriticalPathLength(Board const& board) {
+    int rows = board.rows;
+    int cols = board.cols;
+    std::vector<std::vector<bool>> visited(rows,
+            std::vector<bool>(cols, false));
+    int maxLength = 0;
+
+    for (int i = 0; i < rows; ++i) {
+        for (int j = 0; j < cols; ++j) {
+            if (board.number[i][j] <= 0 || visited[i][j]) continue;
+            int ei, ej;
+            int length = followPath(board, i, j, ei, ej);
+            visited[i][j] = true;
+            if (ei >= 0 && ej >= 0) visited[ei][ej] = true;
+            if (length > maxLength) maxLength = length;
+        }
+    }
+
+    return maxLength;
+}
+
 void output(std::ostream& os, DdStructure<2> const& dd, Board const& quiz,
         bool transposed) {
     int top_level = quiz.rows * (quiz.cols - 1);
@@ -65,7 +140,6 @@ void output(std::ostream& os, DdStructure<2> const& dd, Board const& quiz,
 
     for (DdStructure<2>::const_iterator edges = dd.begin();
             edges != dd.end() && count <= optNum["m"]; ++edges) {
-        os << "#" << ++count << "\n";
         Board answer = quiz;
 
         for (int i = 0; i < quiz.rows; ++i) {
@@ -76,8 +150,11 @@ void output(std::ostream& os, DdStructure<2> const& dd, Board const& quiz,
         }
 
         answer.makeVerticalLinks();
-
         if (transposed) answer.transpose();
+
+        int criticalLen = computeCriticalPathLength(answer);
+        os << "#" << ++count << ", K=" << criticalLen << "\n";
+
         //answer.fillNumbers();
         //answer.writeNumbers(os);
         answer.printNumlin(os);
@@ -119,11 +196,17 @@ void run() {
     DdStructure<2> dd;
     NumlinZdd numlin(quiz, optNum["k"]);
 
-    if (opt["a"]) {
+    if (opt["a"] || opt["n"]) {
         DegreeZdd degree(quiz);
         dd = DdStructure<2>(zddLookahead(degree), opt["p"]);
         dd.zddReduce();
-        dd.zddSubset(zddLookahead(numlin));
+        if (opt["n"]) {
+            NumlinZddWithLen numlinLen(quiz, optNum["n"]);
+            dd.zddSubset(zddLookahead(numlinLen));
+        }
+        else {
+            dd.zddSubset(zddLookahead(numlin));
+        }
     }
     else {
         ConstraintZdd constraint(quiz);
@@ -145,18 +228,26 @@ int main(int argc, char *argv[]) {
     for (unsigned i = 0; i < sizeof(options) / sizeof(options[0]); ++i) {
         opt[options[i][0]] = false;
     }
+    opt["n"] = false;
 
     try {
         for (int i = 1; i < argc; ++i) {
             std::string s = argv[i];
             if (s[0] == '-' && s.size() >= 2) {
                 s = s.substr(1);
-                if (opt.count(s)) {
+                if (i + 1 < argc && opt.count(s + " <n>")) {
+                    char *endptr;
+                    long value = std::strtol(argv[i + 1], &endptr, 0);
+                    if (endptr == argv[i + 1] || *endptr != '\0') {
+                        usage(argv[0]);
+                        return 1;
+                    }
                     opt[s] = true;
+                    optNum[s] = value;
+                    ++i;
                 }
-                else if (i + 1 < argc && opt.count(s + " <n>")) {
+                else if (opt.count(s)) {
                     opt[s] = true;
-                    optNum[s] = std::strtol(argv[++i], 0, 0);
                 }
                 else {
                     usage(argv[0]);
