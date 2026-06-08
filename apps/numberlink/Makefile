@@ -24,7 +24,7 @@ TARGET   = ddnumlin
 CXX      = g++
 CPP      = $(CXX) -E
 CPPFLAGS += -I../../include
-CXXFLAGS += -fopenmp -Wall -fmessage-length=0
+CXXFLAGS += -std=c++11 -fopenmp -Wall -fmessage-length=0
 LDFLAGS  += -fopenmp
 LDLIBS   +=
 
@@ -46,14 +46,20 @@ debug:	$(TARGET:%=%-debug)
 %-debug.o: %.cpp
 	$(CXX) $(CXXFLAGS) -g $(CPPFLAGS) -DDEBUG $(TARGET_ARCH) -c -o $@ $<
 
-$(TARGET): $(OBJS)
+DD_OBJS = Board.o ConstraintZdd.o DegreeZdd.o NumlinZdd.o NumlinWithLenZdd.o ddnumlin.o
+GEN_OBJS = GenerateBoard.o Board.o DegreeZdd.o NumlinWithLenZdd.o
+
+$(TARGET): $(DD_OBJS)
 	$(CXX) $(LDFLAGS) $(TARGET_ARCH) $^ $(LDLIBS) -o $@
 
-$(TARGET:%=%-debug): $(OBJS:%.o=%-debug.o)
+generate-board: $(GEN_OBJS)
+	$(CXX) $(LDFLAGS) $(TARGET_ARCH) $^ $(LDLIBS) -o $@
+
+$(TARGET:%=%-debug): $(DD_OBJS:%.o=%-debug.o)
 	$(CXX) $(LDFLAGS) $(TARGET_ARCH) $^ $(LDLIBS) -o $@
 
 clean:
-	$(RM) $(TARGET) $(OBJS) $(TARGET:%=%-debug) $(OBJS:%.o=%-debug.o)
+	$(RM) $(TARGET) $(OBJS) generate-board $(TARGET:%=%-debug) $(OBJS:%.o=%-debug.o)
 
 define make-depend
 	$(RM) depend.in

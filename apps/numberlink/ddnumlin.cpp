@@ -153,7 +153,7 @@ void output(std::ostream& os, DdStructure<2> const& dd, Board const& quiz,
         if (transposed) answer.transpose();
 
         int criticalLen = computeCriticalPathLength(answer);
-        os << "#" << ++count << ", K=" << criticalLen << "\n";
+        os << "#" << ++count << ", CriticalPathLength=" << criticalLen << "\n";
 
         //answer.fillNumbers();
         //answer.writeNumbers(os);
