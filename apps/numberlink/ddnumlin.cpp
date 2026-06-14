@@ -112,6 +112,12 @@ static int followPath(Board const& board, int si, int sj, int& ei, int& ej) {
     return length;
 }
 
+'''
+端点と経路セルの長さを定数として定義;
+'''
+static const int ENDPOINT_LENGTH = 1;
+static const int PATH_CELL_LENGTH = 1;
+
 static int computeCriticalPathLength(Board const& board) {
     int rows = board.rows;
     int cols = board.cols;
@@ -123,7 +129,8 @@ static int computeCriticalPathLength(Board const& board) {
         for (int j = 0; j < cols; ++j) {
             if (board.number[i][j] <= 0 || visited[i][j]) continue;
             int ei, ej;
-            int length = followPath(board, i, j, ei, ej);
+            int edges = followPath(board, i, j, ei, ej);
+            int length = edges - PATH_CELL_LENGTH + 2 * ENDPOINT_LENGTH;
             visited[i][j] = true;
             if (ei >= 0 && ej >= 0) visited[ei][ej] = true;
             if (length > maxLength) maxLength = length;

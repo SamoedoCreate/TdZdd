@@ -22,11 +22,14 @@
 
 #include "NumlinWithLenZdd.hpp"
 
+static const int ENDPOINT_LENGTH = 1; // 端点セルの長さ
+static const int PATH_CELL_LENGTH = 1; // 経路セルの長さ
+
 int NumlinZddWithLen::getRoot(CellState* state) const {
     for (int j = 0; j < n; ++j) {
         int t = quiz.number[0][j];
         state[j].mate = (t > 0) ? n + t : j;
-        state[j].len = 0; // ★ 追加：初期状態のパス長は0
+        state[j].len = (t > 0) ? ENDPOINT_LENGTH : PATH_CELL_LENGTH;
     }
     return top_level;
 }
@@ -44,8 +47,8 @@ int NumlinZddWithLen::getChild(CellState* state, int level, int take) const {
         if (mj == k) return 0;            // サイクル禁止
 
         // ★ 横辺を追加したことによる新しい経路長の計算
-        // 繋がる前のそれぞれのパス長に、今繋いだ横辺(1)を足す
-        int new_len = state[j].len + state[k].len + 1;
+        // 既に含まれているセル数をそのまま足し合わせる
+        int new_len = state[j].len + state[k].len;
         
         if (new_len > K) return 0; // ★ クリティカルパス長制約による枝刈り！
 
@@ -100,7 +103,7 @@ int NumlinZddWithLen::getChild(CellState* state, int level, int take) const {
             } 
             else { // 縦辺が採用されない場合
                 state[k].mate = (t > 0) ? n + t : k;
-                state[k].len  = 0; // ★ 新しくスタートするので長さは0にリセット
+                state[k].len  = (t > 0) ? ENDPOINT_LENGTH : PATH_CELL_LENGTH;
             }
         }
     }
