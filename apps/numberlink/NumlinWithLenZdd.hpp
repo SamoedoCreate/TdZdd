@@ -9,6 +9,8 @@ struct CellState {
     short len;
     
     // TdZddが状態の合流判定をするための等価演算子
+    // どこ使われている?
+    // 例えば、ZDDの構築過程で、同じ状態に到達した場合に合流するために使われる。
     bool operator==(const CellState& o) const {
         return mate == o.mate && len == o.len;
     }
@@ -29,3 +31,12 @@ public:
     int getRoot(CellState* state) const;
     int getChild(CellState* state, int level, int take) const;
 };
+
+/** 
+フロンティア以上にある経路の長さをLenで管理。
+あるフロンティア(列)にてそれがマージするとき、
+まずマージしようとしてる経路が同端点のものかどうかをMateで判定。
+マージ後の経路長(Lenの和)がKを超えるならNG。
+
+ 
+*/
